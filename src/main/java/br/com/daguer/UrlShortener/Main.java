@@ -12,12 +12,24 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Classe principal que implementa o manipulador de requisições AWS Lambda.
+ * Esta classe é responsável por processar a requisição, gerar um código de URL encurtada,
+ * e salvar os dados da URL no Amazon S3.
+ */
+
 public class Main implements RequestHandler<Map<String, Object>, Map<String, String>> {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-
     private final S3Client s3Client = S3Client.builder().build();
 
+    /**
+     * Metodo que manipula a requisição recebida pelo AWS Lambda.
+     *
+     * @param input   O mapa de entrada contendo os dados da requisição.
+     * @param context O contexto da execução do Lambda.
+     * @return Um mapa contendo o código da URL encurtada.
+     */
     @Override
     public Map<String, String> handleRequest(Map<String, Object> input, Context context) {
 
@@ -25,9 +37,8 @@ public class Main implements RequestHandler<Map<String, Object>, Map<String, Str
 
         Map<String, String> bodyMap;
         try {
-
+            // Converte o corpo da requisição JSON em um mapa
             bodyMap = objectMapper.readValue(body, Map.class);
-
         } catch (JsonProcessingException exception) {
             throw new RuntimeException("Invalid JSON body: " + exception.getMessage(), exception);
         }
@@ -36,26 +47,29 @@ public class Main implements RequestHandler<Map<String, Object>, Map<String, Str
         String expirationTime = bodyMap.get("expirationTime");
         long expirationTimeInSeconds = Long.parseLong(expirationTime);
 
-
+        // Gera um código único para a URL encurtada
         String shortUrlCode = UUID.randomUUID().toString().substring(0, 8);
 
         UrlData urlData = new UrlData(originalUrl, expirationTimeInSeconds);
 
         try {
+            // Converte os dados da URL em JSON
             String urlDataJson = objectMapper.writeValueAsString(urlData);
 
+            // Cria a requisição para salvar os dados no S3
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket("daguer-url-shortener-storage")
                     .key(shortUrlCode + ".json")
                     .build();
 
+            // Salva os dados da URL no S3
             s3Client.putObject(request, RequestBody.fromString(urlDataJson));
 
         } catch (Exception exception) {
             throw new RuntimeException("Error saving URL data: " + exception.getMessage(), exception);
         }
 
-
+        // Cria a resposta contendo o código da URL encurtada
         Map<String, String> response = new HashMap<>();
         response.put("code", shortUrlCode);
 
